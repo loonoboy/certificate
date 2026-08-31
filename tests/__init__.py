@@ -1,0 +1,2 @@
+"""Certificat core tests."""
+
