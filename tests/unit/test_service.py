@@ -13,7 +13,6 @@ from certificat.domain.errors import (
 )
 from certificat.domain.events import ProgressEvent, ProgressStep
 from certificat.domain.models import ConversionRequest, LegacyMode
-from certificat.infrastructure.filesystem.permissions import PlatformPermissions
 from certificat.infrastructure.filesystem.publisher import TransactionalOutputPublisher
 
 
@@ -103,11 +102,26 @@ class FakeBackend:
         return self.matches
 
 
+class FakePermissions:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, Path]] = []
+
+    def secure_workspace(self, path: Path) -> None:
+        self.calls.append(("secure_workspace", path))
+
+    def prepare_certificate(self, path: Path) -> None:
+        self.calls.append(("prepare_certificate", path))
+
+    def prepare_private_key(self, path: Path) -> None:
+        self.calls.append(("prepare_private_key", path))
+
+
 class ConversionServiceTests(unittest.TestCase):
     def make_service(self, backend: FakeBackend) -> ConversionService:
+        self.permissions = FakePermissions()
         return ConversionService(
             backend,  # type: ignore[arg-type]
-            permissions=PlatformPermissions(os_name="posix"),
+            permissions=self.permissions,
             publisher=TransactionalOutputPublisher(),
         )
 
@@ -148,8 +162,14 @@ class ConversionServiceTests(unittest.TestCase):
             self.assertEqual(
                 result.private_key_path.read_bytes(), b"encrypted private key"
             )
-            self.assertEqual(result.certificate_path.stat().st_mode & 0o777, 0o644)
-            self.assertEqual(result.private_key_path.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(
+                [name for name, _ in self.permissions.calls],
+                [
+                    "secure_workspace",
+                    "prepare_certificate",
+                    "prepare_private_key",
+                ],
+            )
             self.assertEqual(events[0], ProgressStep.VALIDATING_INPUT)
             self.assertEqual(events[-1], ProgressStep.COMPLETED)
             self.assertFalse(

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -7,6 +8,7 @@ from certificat.domain.errors import PermissionHardeningError
 from certificat.infrastructure.filesystem.permissions import PlatformPermissions
 
 
+@unittest.skipIf(os.name == "nt", "POSIX modes are unavailable on Windows")
 class PosixPermissionsTests(unittest.TestCase):
     def test_posix_modes_match_legacy_security_behavior(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
