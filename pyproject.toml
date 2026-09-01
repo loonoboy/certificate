@@ -9,6 +9,9 @@ description = "Headless PKCS#12 certificate and private-key extraction core"
 requires-python = ">=3.10"
 dependencies = []
 
+[project.scripts]
+certificat = "certificat.__main__:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

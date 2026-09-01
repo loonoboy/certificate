@@ -7,12 +7,28 @@ reference and are not invoked or modified by the Python package.
 
 ## Current status
 
-The headless conversion pipeline and the transactional output publisher are
-implemented. Unit and integration tests cover normal and legacy PKCS#12 input,
+The headless conversion pipeline, command-line interface, and transactional
+output publisher are implemented. Tests cover normal and legacy PKCS#12 input,
 secret-free OpenSSL invocation, certificate/key validation, permissions,
 cooperative cancellation, and rollback before, between, and after installation
 of the output pair. The PySide6 interface, packaged OpenSSL runtime, installers,
 and release-security acceptance are not implemented yet.
+
+## Command line
+
+Run the converter from the repository root:
+
+```text
+PYTHONPATH=src python3 -m certificat /path/to/client.p12
+```
+
+The PKCS#12 password and the new private-key password are requested through
+hidden terminal prompts and are never accepted as command-line arguments. Use
+`--overwrite` to replace existing outputs, `--openssl PATH` to select a specific
+OpenSSL 3 executable, and `--quiet` to suppress progress messages. Installed
+packages also expose the `certificat` command.
+
+## Python API
 
 The high-level API is `certificat.convert_pkcs12`. Passwords are passed to child
 processes through a per-process environment and never through command-line
