@@ -79,7 +79,7 @@ class OpenSSLBackendTests(unittest.TestCase):
         self.assertEqual(len(runner.calls), 2)
         self.assertIn("-legacy", runner.calls[1]["args"])
         environment = runner.calls[1]["environment"]
-        self.assertEqual(environment["OPENSSL_MODULES"], "/modules")
+        self.assertEqual(environment["OPENSSL_MODULES"], str(Path("/modules")))
         self.assertEqual(environment[P12_PASSWORD_ENV], "secret")
 
     def test_openssl_1_1_1_does_not_repeat_failed_probe_as_legacy(self) -> None:

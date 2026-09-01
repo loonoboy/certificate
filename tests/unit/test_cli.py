@@ -76,9 +76,12 @@ class CertificatCliTests(unittest.TestCase):
         self.assertEqual(request.private_key_password, "key secret")
         self.assertTrue(request.overwrite)
         self.assertIs(convert.call_args.kwargs["openssl"], self.installation)
-        self.assertIn("Certificate: /output/client.crt", stdout.getvalue())
         self.assertIn(
-            "Private key: /output/client_private_encrypted.key",
+            f"Certificate: {self.result.certificate_path}",
+            stdout.getvalue(),
+        )
+        self.assertIn(
+            f"Private key: {self.result.private_key_path}",
             stdout.getvalue(),
         )
         self.assertNotIn("container secret", stdout.getvalue() + stderr.getvalue())

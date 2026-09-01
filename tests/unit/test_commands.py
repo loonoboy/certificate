@@ -29,12 +29,15 @@ class OpenSSLCommandsTests(unittest.TestCase):
     def test_legacy_probe_has_provider_path(self) -> None:
         args = self.commands.pkcs12_probe(Path("client.p12"), LegacyMode.LEGACY)
 
-        self.assertEqual(args[:4], [
-            "pkcs12",
-            "-legacy",
-            "-provider-path",
-            "/opt/openssl/lib/ossl-modules",
-        ])
+        self.assertEqual(
+            args[:4],
+            [
+                "pkcs12",
+                "-legacy",
+                "-provider-path",
+                str(self.installation.legacy_provider_dir),
+            ],
+        )
 
     def test_private_key_commands_form_a_streaming_pipeline(self) -> None:
         extract = self.commands.extract_private_key(

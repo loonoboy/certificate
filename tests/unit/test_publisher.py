@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from certificat.domain.errors import OutputExistsError, PublicationError, UnsafePathError
 from certificat.domain.models import OutputPaths
@@ -106,8 +107,26 @@ class TransactionalOutputPublisherTests(unittest.TestCase):
                     outputs,
                     overwrite=True,
                 )
-
             self.assertEqual(target.read_bytes(), b"outside")
+
+
+    def test_windows_sync_uses_writable_descriptor(self) -> None:
+        path = Path("client.crt")
+        with (
+            patch(
+                "certificat.infrastructure.filesystem.publisher.os.name",
+                "nt",
+            ),
+            patch(
+                "certificat.infrastructure.filesystem.publisher.os.open",
+                return_value=42,
+            ) as open_file,
+            patch("certificat.infrastructure.filesystem.publisher.os.fsync"),
+            patch("certificat.infrastructure.filesystem.publisher.os.close"),
+        ):
+            TransactionalOutputPublisher._sync_file(path)
+
+        open_file.assert_called_once_with(path, os.O_RDWR)
 
 
 if __name__ == "__main__":

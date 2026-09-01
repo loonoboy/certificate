@@ -203,7 +203,8 @@ class TransactionalOutputPublisher:
 
     @staticmethod
     def _sync_file(path: Path) -> None:
-        descriptor = os.open(path, os.O_RDONLY)
+        flags = os.O_RDWR if os.name == "nt" else os.O_RDONLY
+        descriptor = os.open(path, flags)
         try:
             os.fsync(descriptor)
         finally:
