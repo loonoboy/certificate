@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: certificat-core
+Version: 0.1.0
+Summary: Headless PKCS#12 certificate and private-key extraction core
+Requires-Python: >=3.10
+Provides-Extra: gui
+Requires-Dist: PySide6<7,>=6.7; extra == "gui"

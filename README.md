@@ -11,8 +11,9 @@ The headless conversion pipeline, command-line interface, and transactional
 output publisher are implemented. Tests cover normal and legacy PKCS#12 input,
 secret-free OpenSSL invocation, certificate/key validation, permissions,
 cooperative cancellation, and rollback before, between, and after installation
-of the output pair. The PySide6 interface, packaged OpenSSL runtime, installers,
-and release-security acceptance are not implemented yet.
+of the output pair. The PySide6 interface is available for development use.
+The packaged OpenSSL runtime, installers, and release-security acceptance are
+not implemented yet.
 
 ## Command line
 
@@ -27,6 +28,24 @@ hidden terminal prompts and are never accepted as command-line arguments. Use
 `--overwrite` to replace existing outputs, `--openssl PATH` to select a specific
 OpenSSL 3 executable, and `--quiet` to suppress progress messages. Installed
 packages also expose the `certificat` command.
+
+## Desktop application
+
+Install the optional GUI dependency and start the application:
+
+```text
+python3 -m pip install -e ".[gui]"
+certificat-gui
+```
+
+From a source checkout it can also be started with:
+
+```text
+PYTHONPATH=src python3 -m certificat.presentation
+```
+
+The window keeps conversion work off the UI thread, permits one active operation,
+and supports cooperative cancellation and safe overwrite confirmation.
 
 ## Python API
 
