@@ -1,5 +1,0 @@
-[console_scripts]
-certificat = certificat.__main__:main
-
-[gui_scripts]
-certificat-gui = certificat.presentation.app:main
