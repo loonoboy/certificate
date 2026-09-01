@@ -92,6 +92,11 @@ cancellation checkpoints.
 Run the test suite from the repository root:
 
 ```text
-PYTHONPATH=src python3 -m unittest discover -s tests -v
+python3 -m pip install -e ".[test]"
+python3 -m unittest discover -s tests -v
 ```
+
+The `test` extra installs PySide6 so the desktop tests run instead of being
+skipped. GitHub Actions runs the complete suite on Windows x64, macOS Intel,
+and macOS Apple Silicon using the minimum supported Python and Python 3.12.
 
