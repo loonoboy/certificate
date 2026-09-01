@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -14,13 +15,53 @@ class LegacyMode(str, Enum):
     LEGACY = "legacy"
 
 
+class OpenSSLGeneration(str, Enum):
+    """Supported OpenSSL command-line generations."""
+
+    V1_1_1 = "1.1.1"
+    V3 = "3"
+    V4 = "4"
+
+    @classmethod
+    def from_version(cls, version: str) -> OpenSSLGeneration:
+        if re.fullmatch(r"1\.1\.1[a-z]*(?:[-+][^\s]+)?", version):
+            return cls.V1_1_1
+        if re.fullmatch(r"3\.\d+(?:\.\d+)*(?:[-+][^\s]+)?", version):
+            return cls.V3
+        if re.fullmatch(r"4\.\d+(?:\.\d+)*(?:[-+][^\s]+)?", version):
+            return cls.V4
+        raise ValueError(f"Unsupported OpenSSL version: {version}")
+
+    @property
+    def supports_legacy_provider(self) -> bool:
+        """Whether pkcs12 -legacy and providers are available."""
+
+        return self in {OpenSSLGeneration.V3, OpenSSLGeneration.V4}
+
+    @property
+    def unencrypted_key_option(self) -> str:
+        """Return the generation-appropriate PKCS#12 extraction option."""
+
+        if self is OpenSSLGeneration.V1_1_1:
+            return "-nodes"
+        return "-noenc"
+
+
 @dataclass(frozen=True)
 class OpenSSLInstallation:
-    """A validated OpenSSL 3 executable and its optional provider directory."""
+    """A validated supported OpenSSL executable and provider directory."""
 
     executable: Path
     version: str
     legacy_provider_dir: Path | None = None
+    generation: OpenSSLGeneration = field(init=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "generation",
+            OpenSSLGeneration.from_version(self.version),
+        )
 
 
 @dataclass(frozen=True)

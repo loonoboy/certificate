@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 from typing import Sequence, TextIO
 
+from ._version import __version__
 from .application.conversion_service import convert_pkcs12, discover_openssl
 from .domain.errors import ConversionCancelledError, ConversionError
 from .domain.events import ProgressEvent
@@ -25,6 +26,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
+    parser.add_argument(
         "container",
         type=Path,
         help="path to a .p12 or .pfx container",
@@ -38,7 +44,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--openssl",
         type=Path,
         metavar="PATH",
-        help="use this OpenSSL 3 executable instead of automatic discovery",
+        help=(
+            "use this OpenSSL 1.1.1, 3.x, or 4.x executable instead of "
+            "automatic discovery"
+        ),
     )
     parser.add_argument(
         "--quiet",

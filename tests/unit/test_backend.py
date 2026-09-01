@@ -44,11 +44,18 @@ def result(returncode: int, stdout: bytes = b"", stderr: str = "") -> CommandRes
 
 
 class OpenSSLBackendTests(unittest.TestCase):
-    def make_backend(self, runner: FakeRunner) -> OpenSSLBackend:
+    def make_backend(
+        self,
+        runner: FakeRunner,
+        *,
+        version: str = "3.0.0",
+    ) -> OpenSSLBackend:
         installation = OpenSSLInstallation(
             executable=Path("/openssl"),
-            version="3.0.0",
-            legacy_provider_dir=Path("/modules"),
+            version=version,
+            legacy_provider_dir=(
+                None if version.startswith("1.1.1") else Path("/modules")
+            ),
         )
         return OpenSSLBackend(installation, runner=runner)  # type: ignore[arg-type]
 
@@ -74,6 +81,17 @@ class OpenSSLBackendTests(unittest.TestCase):
         environment = runner.calls[1]["environment"]
         self.assertEqual(environment["OPENSSL_MODULES"], "/modules")
         self.assertEqual(environment[P12_PASSWORD_ENV], "secret")
+
+    def test_openssl_1_1_1_does_not_repeat_failed_probe_as_legacy(self) -> None:
+        runner = FakeRunner([result(1, stderr="OpenSSL 1.1.1 failed")])
+        backend = self.make_backend(runner, version="1.1.1w")
+
+        with self.assertRaises(Pkcs12OpenError) as raised:
+            backend.detect_pkcs12_mode(Path("client.p12"), "secret")
+
+        self.assertFalse(raised.exception.legacy_attempted)
+        self.assertEqual(raised.exception.normal_details, "OpenSSL 1.1.1 failed")
+        self.assertEqual(len(runner.calls), 1)
 
     def test_failure_of_both_probes_is_ambiguous_pkcs12_error(self) -> None:
         runner = FakeRunner([

@@ -2,6 +2,7 @@ README.md
 pyproject.toml
 src/certificat/__init__.py
 src/certificat/__main__.py
+src/certificat/_version.py
 src/certificat/application/__init__.py
 src/certificat/application/cancellation.py
 src/certificat/application/conversion_service.py

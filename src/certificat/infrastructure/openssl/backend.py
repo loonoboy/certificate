@@ -17,7 +17,7 @@ from .runner import CommandResult, OpenSSLRunner
 
 
 class OpenSSLBackend:
-    """Perform PKCS#12 conversion and validation through OpenSSL 3."""
+    """Perform PKCS#12 conversion through a supported OpenSSL generation."""
 
     def __init__(
         self,
@@ -84,6 +84,12 @@ class OpenSSLBackend:
         )
         if normal.succeeded:
             return LegacyMode.NORMAL
+
+        if not self.installation.generation.supports_legacy_provider:
+            raise Pkcs12OpenError(
+                normal.stderr,
+                legacy_attempted=False,
+            )
 
         legacy = self.check_pkcs12(
             p12_path,

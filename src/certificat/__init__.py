@@ -1,5 +1,6 @@
 """Public API for the headless Certificat conversion core."""
 
+from ._version import __version__
 from .application.cancellation import CancellationToken
 from .application.conversion_service import (
     ConversionService,
@@ -21,6 +22,7 @@ from .domain.models import (
     ConversionRequest,
     ConversionResult,
     LegacyMode,
+    OpenSSLGeneration,
     OpenSSLInstallation,
     OutputPaths,
 )
@@ -28,6 +30,7 @@ from .infrastructure.openssl.backend import OpenSSLBackend
 from .infrastructure.openssl.locator import OpenSSLLocator
 
 __all__ = [
+    "__version__",
     "CancellationToken",
     "CertificateKeyMismatchError",
     "ConversionCancelledError",
@@ -37,6 +40,7 @@ __all__ = [
     "ConversionService",
     "InputValidationError",
     "LegacyMode",
+    "OpenSSLGeneration",
     "OpenSSLInstallation",
     "OpenSSLBackend",
     "OpenSSLLocator",

@@ -224,7 +224,7 @@ class ConversionService:
 
 
 def discover_openssl(explicit: Path | None = None) -> OpenSSLInstallation:
-    """Discover and validate an OpenSSL 3 installation."""
+    """Discover and validate a supported OpenSSL installation."""
 
     return OpenSSLLocator().locate(explicit)
 

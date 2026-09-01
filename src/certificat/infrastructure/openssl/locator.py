@@ -1,4 +1,4 @@
-"""Cross-platform discovery of an OpenSSL 3 executable and legacy provider."""
+"""Cross-platform discovery of supported OpenSSL command-line generations."""
 
 from __future__ import annotations
 
@@ -11,21 +11,27 @@ from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
 from ...domain.errors import OpenSSLNotFoundError
-from ...domain.models import OpenSSLInstallation
+from ...domain.models import OpenSSLGeneration, OpenSSLInstallation
 
-_VERSION_PATTERN = re.compile(r"^OpenSSL\s+(3\.\d+(?:\.\d+)*(?:[-+][^\s]+)?)")
+_VERSION_PATTERN = re.compile(
+    r"^OpenSSL\s+(1\.1\.1[a-z]*(?:[-+][^\s]+)?|"
+    r"[34]\.\d+(?:\.\d+)*(?:[-+][^\s]+)?)\b"
+)
 _MODULES_PATTERN = re.compile(r'MODULESDIR:\s*"([^"]+)"')
+_SUPPORTED_VERSIONS = "OpenSSL 1.1.1, 3.x, or 4.x"
 
 
 class OpenSSLLocator:
-    """Locate the first candidate that identifies itself as OpenSSL 3.x."""
+    """Locate the first candidate from a supported OpenSSL generation."""
 
     def __init__(
         self,
         *,
         platform_name: str | None = None,
         which: Callable[[str], str | None] = shutil.which,
-        command_runner: Callable[..., subprocess.CompletedProcess[bytes]] = subprocess.run,
+        command_runner: Callable[
+            ..., subprocess.CompletedProcess[bytes]
+        ] = subprocess.run,
         extra_candidates: Sequence[Path] = (),
     ) -> None:
         self.platform_name = platform_name or sys.platform
@@ -47,10 +53,11 @@ class OpenSSLLocator:
 
         if explicit is not None:
             raise OpenSSLNotFoundError(
-                f"The requested executable is not OpenSSL 3.x: {explicit}"
+                f"The requested executable is not {_SUPPORTED_VERSIONS}: {explicit}"
             )
         raise OpenSSLNotFoundError(
-            "OpenSSL 3.x was not found. Install OpenSSL 3 or provide its path."
+            f"{_SUPPORTED_VERSIONS} was not found. Install a supported OpenSSL "
+            "release or provide its path."
         )
 
     def _candidates(self) -> list[Path]:
@@ -108,10 +115,16 @@ class OpenSSLLocator:
             return None
 
         executable = candidate.resolve()
+        version = match.group(1)
+        generation = OpenSSLGeneration.from_version(version)
         return OpenSSLInstallation(
             executable=executable,
-            version=match.group(1),
-            legacy_provider_dir=self._find_legacy_provider_dir(executable),
+            version=version,
+            legacy_provider_dir=(
+                self._find_legacy_provider_dir(executable)
+                if generation.supports_legacy_provider
+                else None
+            ),
         )
 
     def _find_legacy_provider_dir(self, executable: Path) -> Path | None:

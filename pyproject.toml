@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "certificat-core"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Headless PKCS#12 certificate and private-key extraction core"
 requires-python = ">=3.10"
 dependencies = []
@@ -17,6 +17,9 @@ certificat = "certificat.__main__:main"
 
 [project.gui-scripts]
 certificat-gui = "certificat.presentation.app:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "certificat._version.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]

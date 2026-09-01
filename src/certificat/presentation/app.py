@@ -7,6 +7,7 @@ from typing import Sequence, cast
 
 from PySide6.QtWidgets import QApplication
 
+from .._version import __version__
 from .main_window import MainWindow
 
 
@@ -17,6 +18,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         application = cast(QApplication, existing)
     application.setApplicationName("Certificat")
+    application.setApplicationVersion(__version__)
     application.setOrganizationName("Certificat")
 
     window = MainWindow()

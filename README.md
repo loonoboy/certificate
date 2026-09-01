@@ -1,9 +1,12 @@
 # Certificat core
 
-Headless Python core for extracting a client certificate and an encrypted
-PKCS#8 private key from PKCS#12 containers. OpenSSL 3 is used as the
-cryptographic backend. The existing scripts in `legacy/` remain the behavioral
-reference and are not invoked or modified by the Python package.
+Current application version: **0.2.0-alpha**.
+
+Python application for extracting a client certificate and an encrypted PKCS#8
+private key from PKCS#12 containers. The OpenSSL command adapter supports
+OpenSSL 1.1.1, 3.x, and 4.x. OpenSSL 2.x never existed as a public release
+generation. The existing scripts in `legacy/` remain the behavioral reference
+and are not invoked or modified by the Python package.
 
 ## Current status
 
@@ -26,8 +29,15 @@ PYTHONPATH=src python3 -m certificat /path/to/client.p12
 The PKCS#12 password and the new private-key password are requested through
 hidden terminal prompts and are never accepted as command-line arguments. Use
 `--overwrite` to replace existing outputs, `--openssl PATH` to select a specific
-OpenSSL 3 executable, and `--quiet` to suppress progress messages. Installed
-packages also expose the `certificat` command.
+supported OpenSSL executable, and `--quiet` to suppress progress messages.
+Installed packages also expose the `certificat` command. Run
+`certificat --version` to print the application version.
+
+OpenSSL 1.1.1 uses its built-in legacy algorithms and the historical `-nodes`
+option. It is supported for compatibility only and should not be bundled in a
+new production release. OpenSSL 3.x and 4.x are first tried normally and then
+with `-legacy` and the legacy provider when the container requires old
+algorithms.
 
 ## Desktop application
 

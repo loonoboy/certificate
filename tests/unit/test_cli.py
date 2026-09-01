@@ -5,6 +5,7 @@ from typing import Callable, cast
 import unittest
 from unittest.mock import patch
 
+from certificat import __version__
 from certificat.__main__ import main
 from certificat.domain.errors import InputValidationError
 from certificat.domain.events import ProgressEvent, ProgressStep
@@ -17,13 +18,25 @@ from certificat.domain.models import (
 
 class CertificatCliTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.installation = OpenSSLInstallation(Path("/openssl"), "3.test")
+        self.installation = OpenSSLInstallation(
+            Path("/openssl"),
+            "3.0.0-test",
+        )
         self.result = ConversionResult(
             certificate_path=Path("/output/client.crt"),
             private_key_path=Path("/output/client_private_encrypted.key"),
             mode=LegacyMode.NORMAL,
             openssl_version="3.test",
         )
+
+    def test_version_is_available_without_container_or_openssl(self) -> None:
+        stdout = StringIO()
+
+        with self.assertRaises(SystemExit) as raised, redirect_stdout(stdout):
+            main(["--version"])
+
+        self.assertEqual(raised.exception.code, 0)
+        self.assertEqual(stdout.getvalue().strip(), f"certificat {__version__}")
 
     def test_success_uses_hidden_password_prompts_and_prints_paths(self) -> None:
         stdout = StringIO()

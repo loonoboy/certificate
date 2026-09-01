@@ -21,7 +21,10 @@ class OpenSSLCommands:
 
     def _pkcs12_prefix(self, mode: LegacyMode) -> list[str]:
         args = ["pkcs12"]
-        if mode is LegacyMode.LEGACY:
+        if (
+            mode is LegacyMode.LEGACY
+            and self.installation.generation.supports_legacy_provider
+        ):
             args.append("-legacy")
             if self.installation.legacy_provider_dir is not None:
                 args.extend(
@@ -80,7 +83,7 @@ class OpenSSLCommands:
             "-passin",
             f"env:{P12_PASSWORD_ENV}",
             "-nocerts",
-            "-noenc",
+            self.installation.generation.unencrypted_key_option,
         ]
 
     @staticmethod

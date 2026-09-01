@@ -16,7 +16,7 @@ class InputValidationError(ConversionError):
 
 
 class OpenSSLNotFoundError(ConversionError):
-    """No executable reporting an OpenSSL 3.x version was found."""
+    """No executable reporting a supported OpenSSL version was found."""
 
 
 class OpenSSLExecutionError(ConversionError):
@@ -42,14 +42,24 @@ class OpenSSLExecutionError(ConversionError):
 
 
 class Pkcs12OpenError(ConversionError):
-    """Neither normal nor legacy mode could open a PKCS#12 container."""
+    """A supported OpenSSL mode could not open a PKCS#12 container."""
 
-    def __init__(self, normal_details: str = "", legacy_details: str = "") -> None:
+    def __init__(
+        self,
+        normal_details: str = "",
+        legacy_details: str = "",
+        *,
+        legacy_attempted: bool = True,
+    ) -> None:
         self.normal_details = normal_details
         self.legacy_details = legacy_details
+        self.legacy_attempted = legacy_attempted
+        attempted_modes = (
+            "normal or legacy mode" if legacy_attempted else "normal mode"
+        )
         super().__init__(
-            "Unable to open the PKCS#12 container in normal or legacy mode. "
-            "The password may be incorrect, the file may be damaged, or its "
+            f"Unable to open the PKCS#12 container in {attempted_modes}. The "
+            "password may be incorrect, the file may be damaged, or its "
             "algorithms/provider may be unsupported."
         )
 
