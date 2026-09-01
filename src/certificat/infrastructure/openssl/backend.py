@@ -5,6 +5,7 @@ from __future__ import annotations
 import hmac
 from pathlib import Path
 
+from ...application.ports import CancellationTokenPort
 from ...domain.errors import OpenSSLExecutionError, Pkcs12OpenError
 from ...domain.models import LegacyMode, OpenSSLInstallation
 from .commands import (
@@ -53,6 +54,8 @@ class OpenSSLBackend:
         p12_path: Path,
         password: str,
         mode: LegacyMode,
+        *,
+        cancellation: CancellationTokenPort | None = None,
     ) -> CommandResult:
         """Probe a container in exactly one requested provider mode."""
 
@@ -63,14 +66,31 @@ class OpenSSLBackend:
             ),
             capture_stdout=False,
             secret_values=(password,),
+            cancellation=cancellation,
         )
 
-    def detect_pkcs12_mode(self, p12_path: Path, password: str) -> LegacyMode:
-        normal = self.check_pkcs12(p12_path, password, LegacyMode.NORMAL)
+    def detect_pkcs12_mode(
+        self,
+        p12_path: Path,
+        password: str,
+        *,
+        cancellation: CancellationTokenPort | None = None,
+    ) -> LegacyMode:
+        normal = self.check_pkcs12(
+            p12_path,
+            password,
+            LegacyMode.NORMAL,
+            cancellation=cancellation,
+        )
         if normal.succeeded:
             return LegacyMode.NORMAL
 
-        legacy = self.check_pkcs12(p12_path, password, LegacyMode.LEGACY)
+        legacy = self.check_pkcs12(
+            p12_path,
+            password,
+            LegacyMode.LEGACY,
+            cancellation=cancellation,
+        )
         if legacy.succeeded:
             return LegacyMode.LEGACY
 
@@ -83,6 +103,8 @@ class OpenSSLBackend:
         mode: LegacyMode,
         raw_output: Path,
         certificate_output: Path,
+        *,
+        cancellation: CancellationTokenPort | None = None,
     ) -> None:
         extracted = self.runner.run(
             self.commands.extract_certificate(p12_path, raw_output, mode),
@@ -91,12 +113,14 @@ class OpenSSLBackend:
             ),
             capture_stdout=False,
             secret_values=(password,),
+            cancellation=cancellation,
         )
         self._require_success(extracted, "extract certificate")
 
         normalized = self.runner.run(
             self.commands.normalize_certificate(raw_output, certificate_output),
             capture_stdout=False,
+            cancellation=cancellation,
         )
         self._require_success(normalized, "normalize certificate")
 
@@ -107,6 +131,8 @@ class OpenSSLBackend:
         mode: LegacyMode,
         private_key_password: str,
         encrypted_output: Path,
+        *,
+        cancellation: CancellationTokenPort | None = None,
     ) -> None:
         """Compose separate extraction/encryption commands through an OS pipe."""
 
@@ -122,6 +148,7 @@ class OpenSSLBackend:
                 ),
                 source_secret_values=(p12_password,),
                 sink_secret_values=(private_key_password,),
+                cancellation=cancellation,
             )
         except BaseException:
             try:
@@ -130,14 +157,26 @@ class OpenSSLBackend:
                 pass
             raise
 
-    def validate_certificate(self, certificate_path: Path) -> None:
+    def validate_certificate(
+        self,
+        certificate_path: Path,
+        *,
+        cancellation: CancellationTokenPort | None = None,
+    ) -> None:
         result = self.runner.run(
             self.commands.validate_certificate(certificate_path),
             capture_stdout=False,
+            cancellation=cancellation,
         )
         self._require_success(result, "validate certificate")
 
-    def validate_private_key(self, private_key_path: Path, password: str) -> None:
+    def validate_private_key(
+        self,
+        private_key_path: Path,
+        password: str,
+        *,
+        cancellation: CancellationTokenPort | None = None,
+    ) -> None:
         result = self.runner.run(
             self.commands.validate_private_key(private_key_path),
             environment=self._password_environment(
@@ -145,6 +184,7 @@ class OpenSSLBackend:
             ),
             capture_stdout=False,
             secret_values=(password,),
+            cancellation=cancellation,
         )
         self._require_success(result, "validate private key")
 
@@ -153,9 +193,12 @@ class OpenSSLBackend:
         certificate_path: Path,
         private_key_path: Path,
         private_key_password: str,
+        *,
+        cancellation: CancellationTokenPort | None = None,
     ) -> bool:
         certificate_public_key = self.runner.run(
-            self.commands.certificate_public_key(certificate_path)
+            self.commands.certificate_public_key(certificate_path),
+            cancellation=cancellation,
         )
         self._require_success(
             certificate_public_key,
@@ -168,6 +211,7 @@ class OpenSSLBackend:
                 PRIVATE_KEY_PASSWORD_ENV, private_key_password
             ),
             secret_values=(private_key_password,),
+            cancellation=cancellation,
         )
         self._require_success(
             private_public_key,

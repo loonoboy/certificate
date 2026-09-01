@@ -1,5 +1,6 @@
 """Public API for the headless Certificat conversion core."""
 
+from .application.cancellation import CancellationToken
 from .application.conversion_service import (
     ConversionService,
     convert_pkcs12,
@@ -7,6 +8,7 @@ from .application.conversion_service import (
 )
 from .domain.errors import (
     CertificateKeyMismatchError,
+    ConversionCancelledError,
     ConversionError,
     InputValidationError,
     OpenSSLNotFoundError,
@@ -26,7 +28,9 @@ from .infrastructure.openssl.backend import OpenSSLBackend
 from .infrastructure.openssl.locator import OpenSSLLocator
 
 __all__ = [
+    "CancellationToken",
     "CertificateKeyMismatchError",
+    "ConversionCancelledError",
     "ConversionError",
     "ConversionRequest",
     "ConversionResult",

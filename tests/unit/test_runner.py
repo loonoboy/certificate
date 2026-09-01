@@ -1,8 +1,13 @@
 from pathlib import Path
 import os
+import subprocess
 import sys
+import time
+from threading import Event, Thread
 import unittest
+from unittest.mock import patch
 
+from certificat import CancellationToken, ConversionCancelledError
 from certificat.infrastructure.openssl.commands import P12_PASSWORD_ENV
 from certificat.infrastructure.openssl.runner import OpenSSLRunner
 
@@ -40,6 +45,78 @@ class OpenSSLRunnerTests(unittest.TestCase):
                 os.environ.pop(P12_PASSWORD_ENV, None)
             else:
                 os.environ[P12_PASSWORD_ENV] = previous
+
+    def test_cancellation_stops_an_active_process(self) -> None:
+        runner = OpenSSLRunner(Path(sys.executable))
+        cancellation = CancellationToken()
+        process_started = Event()
+        original_popen = subprocess.Popen
+
+        def tracked_popen(*args: object, **kwargs: object) -> subprocess.Popen[bytes]:
+            process = original_popen(*args, **kwargs)  # type: ignore[arg-type]
+            process_started.set()
+            return process
+
+        def request_cancellation() -> None:
+            if process_started.wait(timeout=2):
+                cancellation.cancel()
+
+        canceller = Thread(target=request_cancellation, daemon=True)
+        started_at = time.monotonic()
+        with patch(
+            "certificat.infrastructure.openssl.runner.subprocess.Popen",
+            side_effect=tracked_popen,
+        ):
+            canceller.start()
+            with self.assertRaises(ConversionCancelledError):
+                runner.run(
+                    ["-c", "import time; time.sleep(30)"],
+                    cancellation=cancellation,
+                )
+        canceller.join(timeout=2)
+
+        self.assertTrue(process_started.is_set())
+        self.assertLess(time.monotonic() - started_at, 5)
+
+    def test_cancellation_stops_both_pipeline_processes(self) -> None:
+        runner = OpenSSLRunner(Path(sys.executable))
+        cancellation = CancellationToken()
+        pipeline_started = Event()
+        original_popen = subprocess.Popen
+        process_count = 0
+
+        def tracked_popen(*args: object, **kwargs: object) -> subprocess.Popen[bytes]:
+            nonlocal process_count
+            process = original_popen(*args, **kwargs)  # type: ignore[arg-type]
+            process_count += 1
+            if process_count == 2:
+                pipeline_started.set()
+            return process
+
+        def request_cancellation() -> None:
+            if pipeline_started.wait(timeout=2):
+                cancellation.cancel()
+
+        canceller = Thread(target=request_cancellation, daemon=True)
+        started_at = time.monotonic()
+        with patch(
+            "certificat.infrastructure.openssl.runner.subprocess.Popen",
+            side_effect=tracked_popen,
+        ):
+            canceller.start()
+            with self.assertRaises(ConversionCancelledError):
+                runner.run_pipeline(
+                    ["-c", "import time; time.sleep(30)"],
+                    ["-c", "import sys; sys.stdin.buffer.read()"],
+                    source_environment={},
+                    sink_environment={},
+                    cancellation=cancellation,
+                )
+        canceller.join(timeout=2)
+
+        self.assertTrue(pipeline_started.is_set())
+        self.assertEqual(process_count, 2)
+        self.assertLess(time.monotonic() - started_at, 5)
 
 
 if __name__ == "__main__":

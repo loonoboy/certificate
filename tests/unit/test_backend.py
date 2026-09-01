@@ -2,6 +2,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from certificat import CancellationToken
 from certificat.domain.errors import OpenSSLExecutionError, Pkcs12OpenError
 from certificat.domain.models import LegacyMode, OpenSSLInstallation
 from certificat.infrastructure.openssl.backend import OpenSSLBackend
@@ -101,6 +102,18 @@ class OpenSSLBackendTests(unittest.TestCase):
 
         self.assertEqual(runner.calls[0]["args"][0], "pkcs12")
         self.assertEqual(runner.calls[1]["args"][0], "x509")
+
+    def test_cancellation_is_forwarded_to_runner(self) -> None:
+        runner = FakeRunner([result(0)])
+        backend = self.make_backend(runner)
+        cancellation = CancellationToken()
+
+        backend.validate_certificate(
+            Path("certificate.crt"),
+            cancellation=cancellation,
+        )
+
+        self.assertIs(runner.calls[0]["cancellation"], cancellation)
 
     def test_private_key_uses_direct_pipeline_and_scoped_passwords(self) -> None:
         runner = FakeRunner()

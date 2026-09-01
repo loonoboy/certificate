@@ -7,6 +7,10 @@ class ConversionError(Exception):
     """Base class for expected conversion failures."""
 
 
+class ConversionCancelledError(ConversionError):
+    """The caller requested cooperative cancellation of the conversion."""
+
+
 class InputValidationError(ConversionError):
     """The conversion request is incomplete or points to an unsafe input."""
 

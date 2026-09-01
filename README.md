@@ -9,10 +9,10 @@ reference and are not invoked or modified by the Python package.
 
 The headless conversion pipeline and the transactional output publisher are
 implemented. Unit and integration tests cover normal and legacy PKCS#12 input,
-secret-free OpenSSL invocation, certificate/key validation, permissions, and
-rollback before, between, and after installation of the output pair. The
-PySide6 interface, packaged OpenSSL runtime, installers, and release-security
-acceptance are not implemented yet.
+secret-free OpenSSL invocation, certificate/key validation, permissions,
+cooperative cancellation, and rollback before, between, and after installation
+of the output pair. The PySide6 interface, packaged OpenSSL runtime, installers,
+and release-security acceptance are not implemented yet.
 
 The high-level API is `certificat.convert_pkcs12`. Passwords are passed to child
 processes through a per-process environment and never through command-line
@@ -37,6 +37,12 @@ print(result.certificate_path)
 print(result.private_key_path)
 print(result.mode.value)
 ```
+
+For cooperative cancellation, create a `CancellationToken`, pass it as the
+`cancellation` argument, and call `cancel()` from the UI/controller thread.
+An interrupted operation raises `ConversionCancelledError`; temporary files
+are cleaned and a publication already in progress is rolled back at its safe
+cancellation checkpoints.
 
 Run the test suite from the repository root:
 

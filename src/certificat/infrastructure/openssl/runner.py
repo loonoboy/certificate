@@ -9,10 +9,12 @@ from pathlib import Path
 from threading import Thread
 from typing import Mapping, Sequence
 
+from ...application.ports import CancellationTokenPort
 from ...domain.errors import OpenSSLExecutionError
 from .commands import P12_PASSWORD_ENV, PRIVATE_KEY_PASSWORD_ENV
 
 _MAX_ERROR_BYTES = 16 * 1024
+_POLL_INTERVAL_SECONDS = 0.1
 _SECRET_ENV_NAMES = (P12_PASSWORD_ENV, PRIVATE_KEY_PASSWORD_ENV)
 
 
@@ -60,20 +62,29 @@ class OpenSSLRunner:
         environment: Mapping[str, str] | None = None,
         capture_stdout: bool = True,
         secret_values: Sequence[str] = (),
+        cancellation: CancellationTokenPort | None = None,
     ) -> CommandResult:
-        completed = subprocess.run(
+        self._raise_if_cancelled(cancellation)
+        process = subprocess.Popen(
             [str(self.executable), *args],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE if capture_stdout else subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             env=self._environment(environment),
             shell=False,
-            check=False,
         )
+        try:
+            stdout, stderr = self._communicate(process, cancellation)
+        except BaseException:
+            self._stop_process(process)
+            self._drain_process(process)
+            raise
+
+        assert process.returncode is not None
         return CommandResult(
-            returncode=completed.returncode,
-            stdout=completed.stdout if capture_stdout else b"",
-            stderr=self._sanitize(completed.stderr, secret_values),
+            returncode=process.returncode,
+            stdout=(stdout or b"") if capture_stdout else b"",
+            stderr=self._sanitize(stderr or b"", secret_values),
         )
 
     def run_pipeline(
@@ -85,6 +96,7 @@ class OpenSSLRunner:
         sink_environment: Mapping[str, str],
         source_secret_values: Sequence[str] = (),
         sink_secret_values: Sequence[str] = (),
+        cancellation: CancellationTokenPort | None = None,
     ) -> None:
         """Pipe source stdout directly into sink stdin.
 
@@ -92,6 +104,7 @@ class OpenSSLRunner:
         Python, captured for diagnostics, or written to a file.
         """
 
+        self._raise_if_cancelled(cancellation)
         source = subprocess.Popen(
             [str(self.executable), *source_args],
             stdin=subprocess.DEVNULL,
@@ -104,6 +117,7 @@ class OpenSSLRunner:
         assert source.stderr is not None
 
         try:
+            self._raise_if_cancelled(cancellation)
             sink = subprocess.Popen(
                 [str(self.executable), *sink_args],
                 stdin=source.stdout,
@@ -115,6 +129,7 @@ class OpenSSLRunner:
         except BaseException:
             source.stdout.close()
             self._stop_process(source)
+            source.stderr.close()
             raise
 
         source.stdout.close()
@@ -130,8 +145,8 @@ class OpenSSLRunner:
         try:
             # Drain source stderr concurrently. Otherwise a verbose source can
             # fill its stderr pipe while the sink waits for more input.
-            _, sink_stderr_bytes = sink.communicate()
-            source_returncode = source.wait()
+            _, sink_stderr_bytes = self._communicate(sink, cancellation)
+            source_returncode = self._wait(source, cancellation)
             stderr_thread.join()
             source_stderr_bytes = source_stderr_parts[0]
         except BaseException:
@@ -153,16 +168,66 @@ class OpenSSLRunner:
             raise OpenSSLExecutionError(
                 "encrypt private key as PKCS#8",
                 sink.returncode,
-                self._sanitize(sink_stderr_bytes, sink_secret_values),
+                self._sanitize(sink_stderr_bytes or b"", sink_secret_values),
             )
+
+    @staticmethod
+    def _raise_if_cancelled(
+        cancellation: CancellationTokenPort | None,
+    ) -> None:
+        if cancellation is not None:
+            cancellation.raise_if_cancelled()
+
+    @classmethod
+    def _communicate(
+        cls,
+        process: subprocess.Popen[bytes],
+        cancellation: CancellationTokenPort | None,
+    ) -> tuple[bytes | None, bytes | None]:
+        if cancellation is None:
+            return process.communicate()
+        while True:
+            cancellation.raise_if_cancelled()
+            try:
+                return process.communicate(timeout=_POLL_INTERVAL_SECONDS)
+            except subprocess.TimeoutExpired:
+                continue
+
+    @classmethod
+    def _wait(
+        cls,
+        process: subprocess.Popen[bytes],
+        cancellation: CancellationTokenPort | None,
+    ) -> int:
+        if cancellation is None:
+            return process.wait()
+        while True:
+            cancellation.raise_if_cancelled()
+            try:
+                return process.wait(timeout=_POLL_INTERVAL_SECONDS)
+            except subprocess.TimeoutExpired:
+                continue
+
+    @staticmethod
+    def _drain_process(process: subprocess.Popen[bytes]) -> None:
+        try:
+            process.communicate()
+        except (OSError, ValueError):
+            pass
 
     @staticmethod
     def _stop_process(process: subprocess.Popen[bytes]) -> None:
         if process.poll() is not None:
             return
-        process.terminate()
+        try:
+            process.terminate()
+        except ProcessLookupError:
+            return
         try:
             process.wait(timeout=2)
         except subprocess.TimeoutExpired:
-            process.kill()
+            try:
+                process.kill()
+            except ProcessLookupError:
+                return
             process.wait()

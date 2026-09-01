@@ -2,13 +2,16 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from certificat.application.cancellation import CancellationToken
 from certificat.application.conversion_service import ConversionService
+from certificat.application.ports import CancellationTokenPort
 from certificat.domain.errors import (
     CertificateKeyMismatchError,
+    ConversionCancelledError,
     InputValidationError,
     OutputExistsError,
 )
-from certificat.domain.events import ProgressStep
+from certificat.domain.events import ProgressEvent, ProgressStep
 from certificat.domain.models import ConversionRequest, LegacyMode
 from certificat.infrastructure.filesystem.permissions import PlatformPermissions
 from certificat.infrastructure.filesystem.publisher import TransactionalOutputPublisher
@@ -21,7 +24,21 @@ class FakeBackend:
         self.matches = matches
         self.calls: list[str] = []
 
-    def detect_pkcs12_mode(self, p12_path: Path, password: str) -> LegacyMode:
+    @staticmethod
+    def check_cancellation(
+        cancellation: CancellationTokenPort | None,
+    ) -> None:
+        if cancellation is not None:
+            cancellation.raise_if_cancelled()
+
+    def detect_pkcs12_mode(
+        self,
+        p12_path: Path,
+        password: str,
+        *,
+        cancellation: CancellationTokenPort | None = None,
+    ) -> LegacyMode:
+        self.check_cancellation(cancellation)
         self.calls.append("detect")
         return LegacyMode.LEGACY
 
@@ -32,7 +49,10 @@ class FakeBackend:
         mode: LegacyMode,
         raw_output: Path,
         certificate_output: Path,
+        *,
+        cancellation: CancellationTokenPort | None = None,
     ) -> None:
+        self.check_cancellation(cancellation)
         self.calls.append("extract_certificate")
         raw_output.write_bytes(b"raw certificate")
         certificate_output.write_bytes(b"clean certificate")
@@ -44,14 +64,30 @@ class FakeBackend:
         mode: LegacyMode,
         private_key_password: str,
         encrypted_output: Path,
+        *,
+        cancellation: CancellationTokenPort | None = None,
     ) -> None:
+        self.check_cancellation(cancellation)
         self.calls.append("extract_private_key")
         encrypted_output.write_bytes(b"encrypted private key")
 
-    def validate_certificate(self, certificate_path: Path) -> None:
+    def validate_certificate(
+        self,
+        certificate_path: Path,
+        *,
+        cancellation: CancellationTokenPort | None = None,
+    ) -> None:
+        self.check_cancellation(cancellation)
         self.calls.append("validate_certificate")
 
-    def validate_private_key(self, private_key_path: Path, password: str) -> None:
+    def validate_private_key(
+        self,
+        private_key_path: Path,
+        password: str,
+        *,
+        cancellation: CancellationTokenPort | None = None,
+    ) -> None:
+        self.check_cancellation(cancellation)
         self.calls.append("validate_private_key")
 
     def certificate_matches_private_key(
@@ -59,7 +95,10 @@ class FakeBackend:
         certificate_path: Path,
         private_key_path: Path,
         private_key_password: str,
+        *,
+        cancellation: CancellationTokenPort | None = None,
     ) -> bool:
+        self.check_cancellation(cancellation)
         self.calls.append("match")
         return self.matches
 
@@ -172,6 +211,54 @@ class ConversionServiceTests(unittest.TestCase):
                 )
 
             self.assertEqual(backend.calls, [])
+
+    def test_pre_cancelled_request_stops_before_backend_and_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            p12_path = root / "client.p12"
+            p12_path.write_bytes(b"synthetic p12")
+            backend = FakeBackend()
+            cancellation = CancellationToken()
+            cancellation.cancel()
+
+            with self.assertRaises(ConversionCancelledError):
+                self.make_service(backend).convert(
+                    self.request(p12_path),
+                    cancellation=cancellation,
+                )
+
+            self.assertEqual(backend.calls, [])
+            self.assertFalse((root / "client.crt").exists())
+            self.assertFalse((root / "client_private_encrypted.key").exists())
+            self.assertFalse(any(root.glob(".client.certificat-*")))
+
+    def test_progress_callback_can_cancel_before_openssl_step(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            p12_path = root / "client.p12"
+            p12_path.write_bytes(b"synthetic p12")
+            backend = FakeBackend()
+            cancellation = CancellationToken()
+            events: list[ProgressStep] = []
+
+            def on_progress(event: ProgressEvent) -> None:
+                step = event.step
+                events.append(step)
+                if step is ProgressStep.CHECKING_CONTAINER:
+                    cancellation.cancel()
+
+            with self.assertRaises(ConversionCancelledError):
+                self.make_service(backend).convert(
+                    self.request(p12_path),
+                    progress=on_progress,
+                    cancellation=cancellation,
+                )
+
+            self.assertEqual(backend.calls, [])
+            self.assertEqual(events[-1], ProgressStep.CHECKING_CONTAINER)
+            self.assertFalse((root / "client.crt").exists())
+            self.assertFalse((root / "client_private_encrypted.key").exists())
+            self.assertFalse(any(root.glob(".client.certificat-*")))
 
     def test_passwords_are_not_present_in_request_repr(self) -> None:
         request = ConversionRequest(
